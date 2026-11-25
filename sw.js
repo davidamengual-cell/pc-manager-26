@@ -1,0 +1,4 @@
+const CACHE='pcmanager-beta-29rc1'; const FILES=['./Beta.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
+self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES))));
+self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('pcmanager-beta-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
+self.addEventListener('fetch',e=>{const u=new URL(e.request.url);if(e.request.method!=='GET'||u.origin!==self.location.origin)return;const base=new URL('./',self.location.href);const file=FILES.find(f=>new URL(f,base).pathname===u.pathname);if(!file)return;e.respondWith(fetch(e.request).then(r=>{if(!r.ok)throw Error("HTTP "+r.status);if(r.ok){const copy=r.clone();e.waitUntil(caches.open(CACHE).then(c=>c.put(new URL(file,base).href,copy)));}return r;}).catch(()=>caches.open(CACHE).then(c=>c.match(new URL(file,base).href))));});
