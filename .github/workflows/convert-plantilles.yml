@@ -1,0 +1,40 @@
+name: Convertir plantilles PC Manager
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/convert-plantilles.yml'
+permissions:
+  contents: read
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pyarrow
+      - name: Descarregar font original
+        run: curl --fail --location --retry 3 https://github.com/florentfougeres/OpenFootballBase-Data/releases/latest/download/openfootballbase-data.tar.gz -o source.tar.gz
+      - name: Convertir a JSON
+        run: |
+          python - <<'PY'
+          import tarfile, io, json, zipfile
+          import pyarrow.parquet as pq
+          patterns = {'squad':'squad/2026-27.', 'club_season':'club_season/2026-27.', 'birth':'birth/birth.'}
+          with tarfile.open('source.tar.gz','r:gz') as t, zipfile.ZipFile('PCManager_dades_reals.zip','w',zipfile.ZIP_DEFLATED) as z:
+              for key, prefix in patterns.items():
+                  matches = [m for m in t.getmembers() if m.isfile() and prefix in m.name and m.name.endswith('.parquet')]
+                  assert len(matches)==1, (key,len(matches))
+                  table = pq.read_table(io.BytesIO(t.extractfile(matches[0]).read()))
+                  assert table.num_rows > 0
+                  print(key, table.num_rows, table.column_names)
+                  z.writestr(key+'.json',json.dumps(table.to_pylist(),ensure_ascii=False,default=str))
+              z.writestr('SOURCE.txt','OpenFootballBase-Data: https://github.com/florentfougeres/OpenFootballBase-Data\nOriginal source fields preserved. Consult upstream license and attribution before redistribution.')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PCManager_dades_reals
+          path: PCManager_dades_reals.zip
+          if-no-files-found: error
